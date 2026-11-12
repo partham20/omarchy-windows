@@ -1,0 +1,155 @@
+:root {
+  --bg: #1a1b26;
+  --bg2: #16161e;
+  --line: #292e42;
+  --fg: #a9b1d6;
+  --fg-hi: #c0caf5;
+  --dim: #565f89;
+  --accent: #7aa2f7;
+  --green: #9ece6a;
+  --warn: #e0af68;
+  --crit: #f7768e;
+  --hover: rgb(122 162 247 / 14%);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+body {
+  color: var(--fg);
+  font-family: 'JetBrainsMono Nerd Font', 'JetBrainsMono NF', Consolas, monospace;
+  font-size: 12px;
+  user-select: none;
+  border: 1px solid var(--line);
+}
+
+.pop { display: flex; flex-direction: column; height: 100%; }
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-hi);
+}
+.head .title { flex: 1; font-weight: bold; }
+.head .icon { color: var(--accent); }
+
+.body { flex: 1; overflow-y: auto; padding: 8px 10px; }
+.body::-webkit-scrollbar { width: 6px; }
+.body::-webkit-scrollbar-thumb { background: var(--line); }
+
+.section { margin-bottom: 10px; }
+.label { color: var(--dim); margin: 6px 0 4px; text-transform: lowercase; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  min-height: 26px;
+}
+.row.click { cursor: pointer; }
+.row.click:hover, .btn:hover, .iconbtn:hover { background: var(--hover); color: var(--accent); }
+.row .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.active { color: var(--accent); }
+.row .tag { color: var(--dim); font-size: 11px; }
+.row .tag.warn { color: var(--warn); }
+
+.btn, .iconbtn {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  text-align: center;
+}
+.btn:active, .iconbtn:active { background: rgb(122 162 247 / 28%); }
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+.btn.danger { border-color: var(--crit); color: var(--crit); }
+.btn[disabled] { opacity: 0.4; pointer-events: none; }
+.iconbtn { border: none; padding: 4px 8px; font-size: 14px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+.toggle {
+  all: unset;
+  cursor: pointer;
+  width: 30px;
+  height: 14px;
+  border: 1px solid var(--dim);
+  position: relative;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  background: var(--dim);
+  transition: left 0.12s;
+}
+.toggle.on { border-color: var(--accent); }
+.toggle.on::after { left: 18px; background: var(--accent); }
+.toggle[disabled] { opacity: 0.4; pointer-events: none; }
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--line);
+  outline: none;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  background: var(--accent);
+  border: none;
+}
+
+input[type='password'], input[type='text'] {
+  all: unset;
+  flex: 1;
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  color: var(--fg-hi);
+  user-select: text;
+}
+input[type='password']:focus, input[type='text']:focus { border-color: var(--accent); }
+
+.msg { padding: 4px 6px; color: var(--dim); }
+.msg.ok { color: var(--green); }
+.msg.err { color: var(--crit); }
+.msg.warn { color: var(--warn); }
+
+.big { font-size: 22px; color: var(--fg-hi); }
+.muted { color: var(--dim); }
+.accent { color: var(--accent); }
+.ok { color: var(--green); }
+.warn { color: var(--warn); }
+.crit { color: var(--crit); }
+
+/* calendar */
+.cal { width: 100%; border-collapse: collapse; text-align: center; }
+.cal th { color: var(--dim); font-weight: normal; padding: 3px 0; }
+.cal td { padding: 3px 0; }
+.cal td.wk { color: var(--dim); font-size: 11px; border-right: 1px solid var(--line); }
+.cal td.out { color: #3b4261; }
+.cal td.today { background: var(--accent); color: var(--bg); }
+.cal td.we { color: #bb9af7; }
+.cal td.today.we { color: var(--bg); }
+
+.spark { width: 100%; height: 44px; display: block; }
+.bar { height: 4px; background: var(--line); margin-top: 3px; }
+.bar > div { height: 100%; background: var(--accent); }
+.bar.warn > div { background: var(--warn); }
+.bar.crit > div { background: var(--crit); }

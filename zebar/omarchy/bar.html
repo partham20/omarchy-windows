@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" type="text/css" href="./styles.css" />
+    <script
+      src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"
+      integrity="sha256-aS0B0wnsaDByLfE16h4MDCP1fQFccysd1YWOcV+gbBo="
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+      import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1';
+      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      // Nerd Font glyphs (JetBrainsMono Nerd Font).
+      const G = {
+        logo: '\u{F17A}',
+        wsFocused: '\u{F14FB}',
+        bluetooth: '\u{F00AF}',
+        wifi: ['\u{F092F}', '\u{F091F}', '\u{F0922}', '\u{F0925}', '\u{F0928}'],
+        ethernet: '\u{F0002}',
+        netOff: '\u{F092E}',
+        vpn: '\u{F0582}',
+        volHigh: '\u{F057E}',
+        volMed: '\u{F0580}',
+        volLow: '\u{F057F}',
+        volMute: '\u{F075F}',
+        cpu: '\u{F035B}',
+        bat: ['\u{F007A}', '\u{F007B}', '\u{F007C}', '\u{F007D}', '\u{F007E}', '\u{F007F}', '\u{F0080}', '\u{F0081}', '\u{F0082}', '\u{F0079}'],
+        batCharging: '\u{F0084}',
+        weather: {
+          clear_day: '\u{E30D}', clear_night: '\u{E32B}',
+          cloudy_day: '\u{E302}', cloudy_night: '\u{E37E}',
+          light_rain_day: '\u{E30B}', light_rain_night: '\u{E328}',
+          heavy_rain_day: '\u{E308}', heavy_rain_night: '\u{E325}',
+          snow_day: '\u{E30A}', snow_night: '\u{E327}',
+          thunder_day: '\u{E30F}', thunder_night: '\u{E32A}',
+        },
+      };
+
+      const providers = zebar.createProviderGroup({
+        glazewm: { type: 'glazewm' },
+        date: { type: 'date', formatting: 'cccc HH:mm', refreshInterval: 1000 },
+        network: { type: 'network', refreshInterval: 5000 },
+        cpu: { type: 'cpu', refreshInterval: 3000 },
+        battery: { type: 'battery', refreshInterval: 10000 },
+        audio: { type: 'audio' },
+        systray: { type: 'systray' },
+        weather: { type: 'weather', refreshInterval: 30 * 60 * 1000 },
+      });
+
+      // ---------- quick-settings popups ----------
+      // Each popup is its own widget (popup-<mode>) in this pack. They talk to the bar
+      // over a BroadcastChannel so only one is open and re-clicking an icon closes it.
+      const chan = new BroadcastChannel('omarchy');
+      const POPUP_SIZE = { audio: [300, 340], clock: [268, 262], power: [280, 318], cpu: [290, 262], wifi: [320, 430], bt: [300, 400] };
+      const popupState = { open: null, lastClosed: null, lastClosedAt: 0 };
+      const cpuHistory = [];
+      chan.onmessage = e => {
+        const m = e.data || {};
+        if (m.t === 'opened') popupState.open = m.mode;
+        if (m.t === 'closed') {
+          if (popupState.open === m.mode) popupState.open = null;
+          popupState.lastClosed = m.mode;
+          popupState.lastClosedAt = m.at || Date.now();
+        }
+        if (m.t === 'cpu-history?') chan.postMessage({ t: 'cpu-history', samples: cpuHistory.slice() });
+      };
+
+      let monitorName = null;
+      (async () => {
+        try { monitorName = (await zebar.currentWidget().tauriWindow.currentMonitor())?.name ?? null; }
+        catch (err) { console.warn('currentMonitor unavailable, popups use primary monitor:', err); }
+      })();
+
+      async function togglePopup(mode, el) {
+        const justClosed = popupState.lastClosed === mode && Date.now() - popupState.lastClosedAt < 450;
+        if (popupState.open === mode || justClosed) {
+          chan.postMessage({ t: 'close', mode });
+          popupState.open = null;
+          popupState.lastClosed = null;
+          return;
+        }
+        chan.postMessage({ t: 'opening', mode });
+        const [w, h] = POPUP_SIZE[mode];
+        const r = el.getBoundingClientRect();
+        const x = Math.round(Math.min(Math.max(r.left + r.width / 2 - w / 2, 4), window.innerWidth - w - 4));
+        try {
+          await zebar.startWidget(
+            `popup-${mode}`,
+            {
+              anchor: 'top_left',
+              offsetX: `${x}px`,
+              offsetY: '30px',
+              width: `${w}px`,
+              height: `${h}px`,
+              monitorSelection: monitorName ? { type: 'name', match: monitorName } : { type: 'primary' },
+              dockToEdge: { enabled: false, edge: null, windowMargin: '0px' },
+            },
+            { packId: 'omarchy' },
+          );
+          popupState.open = mode;
+        } catch (err) {
+          console.error(`could not open popup ${mode}:`, err);
+        }
+      }
+      const pop = mode => e => togglePopup(mode, e.currentTarget);
+      const rclick = fn => e => { e.preventDefault(); fn(); };
+
+      // Every click goes through here so a failure is logged instead of silent.
+      async function run(program, args) {
+        try {
+          await zebar.shellExec(program, args);
+        } catch (err) {
+          console.error(`shellExec ${program} ${args ?? ''} failed:`, err);
+        }
+      }
+      const openSettings = page => run('explorer', `ms-settings:${page}`);
+
+      function wmCommand(output, cmd) {
+        output.glazewm?.runCommand(cmd).catch(err => console.error(`glazewm ${cmd} failed:`, err));
+      }
+
+      // Some tray apps don't accept forwarded events (esp. hover); don't let that
+      // surface as an unhandled rejection.
+      function trayCall(output, fn, iconId, quiet = false) {
+        output.systray?.[fn]?.(iconId)?.catch(err => {
+          if (!quiet) console.warn(`systray ${fn} failed:`, err);
+        });
+      }
+
+      function isoWeek(d) {
+        const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const day = t.getUTCDay() || 7;
+        t.setUTCDate(t.getUTCDate() + 4 - day);
+        const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+        return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+      }
+
+      function wsLabel(name) {
+        return name === '10' ? '0' : name;
+      }
+
+      function workspaceList(gw) {
+        const current = gw.currentWorkspaces ?? [];
+        const otherMonitorNames = new Set(
+          (gw.allWorkspaces ?? [])
+            .filter(w => !current.some(c => c.name === w.name))
+            .map(w => w.name),
+        );
+        const byName = new Map(current.map(w => [w.name, w]));
+        for (const n of ['1', '2', '3', '4', '5']) {
+          if (!byName.has(n) && !otherMonitorNames.has(n)) byName.set(n, null);
+        }
+        return [...byName.entries()].sort(
+          (a, b) => (parseInt(a[0], 10) || 99) - (parseInt(b[0], 10) || 99),
+        );
+      }
+
+      function networkIcon(net) {
+        const iface = net.defaultInterface;
+        if (!iface) return G.netOff;
+        if (iface.type === 'ethernet') return G.ethernet;
+        if (iface.type === 'proprietary_virtual') return G.vpn;
+        if (iface.type === 'wifi') {
+          const s = net.defaultGateway?.signalStrength ?? 0;
+          if (s >= 80) return G.wifi[4];
+          if (s >= 60) return G.wifi[3];
+          if (s >= 40) return G.wifi[2];
+          if (s >= 20) return G.wifi[1];
+          return G.wifi[0];
+        }
+        return G.netOff;
+      }
+
+      function volumeIcon(dev) {
+        if (!dev || dev.isMuted || dev.volume === 0) return G.volMute;
+        if (dev.volume >= 66) return G.volHigh;
+        if (dev.volume >= 33) return G.volMed;
+        return G.volLow;
+      }
+
+      function batteryIcon(b) {
+        if (b.isCharging) return G.batCharging;
+        const idx = Math.min(9, Math.max(0, Math.ceil(b.chargePercent / 10) - 1));
+        return G.bat[idx];
+      }
+
+      createRoot(document.getElementById('root')).render(<App />);
+
+      function App() {
+        const [output, setOutput] = useState(providers.outputMap);
+        const [altClock, setAltClock] = useState(false);
+
+        useEffect(() => {
+          providers.onOutput(() => setOutput({ ...providers.outputMap }));
+          const sampler = setInterval(() => {
+            const u = providers.outputMap.cpu?.usage;
+            if (u != null) { cpuHistory.push(u); if (cpuHistory.length > 60) cpuHistory.shift(); }
+          }, 3000);
+          return () => clearInterval(sampler);
+          providers.onError(() => console.warn('provider errors:', providers.errorMap));
+        }, []);
+
+        const gw = output.glazewm;
+        const net = output.network;
+        const audioDev = output.audio?.defaultPlaybackDevice;
+        const bat = output.battery;
+        const now = output.date ? new Date(output.date.now) : new Date();
+
+        const clockText = altClock
+          ? `${now.getDate()} ${now.toLocaleString('en-US', { month: 'long' })}  W${isoWeek(now)}  ${now.getFullYear()}`
+          : output.date?.formatted;
+
+        return (
+          <div className="app">
+            <div className="left">
+              <button
+                className="mod logo"
+                title="Left: Command Palette · Right: Terminal"
+                onClick={() => run('explorer', 'shell:AppsFolder\\Microsoft.CommandPalette_8wekyb3d8bbwe!App')}
+                onContextMenu={e => { e.preventDefault(); run('wt'); }}
+              >
+                {G.logo}
+              </button>
+
+              {gw && workspaceList(gw).map(([name, ws]) => {
+                const focused = ws?.hasFocus;
+                const empty = !ws || (ws.children?.length ?? 0) === 0;
+                return (
+                  <button
+                    key={name}
+                    className={`mod ws ${focused ? 'focused' : ''} ${ws?.isDisplayed ? 'displayed' : ''} ${empty && !focused ? 'empty' : ''}`}
+                    title={`Workspace ${name}`}
+                    onClick={() => wmCommand(output, `focus --workspace ${name}`)}
+                  >
+                    {focused ? G.wsFocused : wsLabel(name)}
+                  </button>
+                );
+              })}
+
+              {gw?.bindingModes?.map(mode => (
+                <button
+                  key={mode.name}
+                  className="mod binding"
+                  title="Click to exit mode"
+                  onClick={() => wmCommand(output, `wm-disable-binding-mode --name ${mode.name}`)}
+                >
+                  {mode.displayName ?? mode.name}
+                </button>
+              ))}
+
+              {gw?.isPaused && (
+                <button className="mod paused" onClick={() => wmCommand(output, 'wm-toggle-pause')}>
+                  PAUSED
+                </button>
+              )}
+            </div>
+
+            <div className="center">
+              <button
+                className="mod clock"
+                title="Click: calendar · Right-click: date & time settings"
+                onClick={pop('clock')}
+                onContextMenu={rclick(() => openSettings('dateandtime'))}
+              >
+                {clockText}
+              </button>
+              {output.weather && (
+                <button className="mod dim" title="Weather · click: toggle date format" onClick={() => setAltClock(v => !v)}>
+                  {G.weather[output.weather.status] ?? ''} {Math.round(output.weather.celsiusTemp)}°C
+                </button>
+              )}
+            </div>
+
+            <div className="right">
+              {output.systray?.icons?.length > 0 && (
+                <div className="tray">
+                  {output.systray.icons.map(icon => (
+                    <button
+                      key={icon.id}
+                      className="mod tray-icon"
+                      title={icon.tooltip}
+                      onClick={() => trayCall(output, 'onLeftClick', icon.id)}
+                      onContextMenu={e => { e.preventDefault(); trayCall(output, 'onRightClick', icon.id); }}
+                      onMouseEnter={() => trayCall(output, 'onHoverEnter', icon.id, true)}
+                      onMouseLeave={() => trayCall(output, 'onHoverLeave', icon.id, true)}
+                    >
+                      <img src={icon.iconUrl} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button className="mod" title="Bluetooth · right-click: settings" onClick={pop('bt')} onContextMenu={rclick(() => openSettings('bluetooth'))}>
+                {G.bluetooth}
+              </button>
+
+              {net && (
+                <button
+                  className="mod"
+                  title={net.defaultGateway?.ssid ?? net.defaultInterface?.friendlyName ?? 'Disconnected'}
+                  onClick={pop('wifi')}
+                  onContextMenu={rclick(() => openSettings(net.defaultInterface?.type === 'ethernet' ? 'network-ethernet' : 'network-wifi'))}
+                >
+                  {networkIcon(net)}
+                </button>
+              )}
+
+              {output.audio && (
+                <button
+                  className="mod"
+                  title={audioDev ? `${audioDev.name}: ${audioDev.isMuted ? 'muted' : audioDev.volume + '%'}\nScroll: volume · Right-click: mute` : 'No output device'}
+                  onClick={pop('audio')}
+                  onContextMenu={e => { e.preventDefault(); audioDev && output.audio.setMute(!audioDev.isMuted); }}
+                  onWheel={e => {
+                    if (!audioDev) return;
+                    const v = Math.max(0, Math.min(100, Math.round(audioDev.volume + (e.deltaY < 0 ? 5 : -5))));
+                    output.audio.setVolume(v);
+                  }}
+                >
+                  {volumeIcon(audioDev)}
+                </button>
+              )}
+
+              {output.cpu && (
+                <button
+                  className={`mod ${output.cpu.usage > 85 ? 'warn' : ''}`}
+                  title={`CPU ${Math.round(output.cpu.usage)}% · right-click: Task Manager`}
+                  onClick={pop('cpu')}
+                  onContextMenu={rclick(() => run('taskmgr'))}
+                >
+                  {G.cpu}
+                </button>
+              )}
+
+              {bat && (
+                <button
+                  className={`mod ${!bat.isCharging && bat.chargePercent < 10 ? 'crit' : !bat.isCharging && bat.chargePercent < 20 ? 'warn' : ''}`}
+                  title={`Battery ${Math.round(bat.chargePercent)}% (${bat.state})`}
+                  onClick={pop('power')}
+                  onContextMenu={rclick(() => openSettings('batterysaver'))}
+                >
+                  {batteryIcon(bat)}
+                  {!bat.isCharging && bat.state !== 'full' && <span>{Math.round(bat.chargePercent)}%</span>}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+    </script>
+  </body>
+</html>

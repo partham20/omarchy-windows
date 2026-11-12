@@ -1,0 +1,139 @@
+:root {
+  --bg: #1a1b26;
+  --fg: #a9b1d6;
+  --dim: #565f89;
+  --accent: #7aa2f7;
+  --warn: #e0af68;
+  --crit: #f7768e;
+  --hover: rgb(122 162 247 / 18%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+body {
+  color: var(--fg);
+  font-family: 'JetBrainsMono Nerd Font', 'JetBrainsMono NF', Consolas, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 100%;
+  padding: 0 8px;
+}
+
+.left,
+.center,
+.right {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 2px;
+}
+
+.center {
+  justify-self: center;
+}
+
+.right {
+  justify-self: end;
+}
+
+/* Every module is a real <button> so it takes clicks and shows feedback. */
+.mod {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.mod:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+
+.mod:active {
+  background: rgb(122 162 247 / 30%);
+}
+
+.logo {
+  color: var(--accent);
+  font-size: 14px;
+  padding: 0 9px 0 4px;
+}
+
+.ws {
+  min-width: 22px;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.ws.empty {
+  opacity: 0.5;
+}
+
+.ws.focused {
+  color: var(--accent);
+}
+
+.ws.displayed:not(.focused) {
+  color: #c0caf5;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.paused {
+  color: var(--crit);
+}
+
+.binding {
+  color: var(--warn);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.crit {
+  color: var(--crit);
+}
+
+.tray {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.tray-icon {
+  padding: 0 4px;
+}
+
+.tray-icon img {
+  width: 14px;
+  height: 14px;
+  display: block;
+}

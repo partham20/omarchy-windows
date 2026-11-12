@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" type="text/css" href="./popup.css" />
+    <script>
+      window.POPUP = 'cpu';
+      // Zebar logs every IPC call with its arguments to the console. Drop the shell
+      // ones so SSIDs, PINs and Wi-Fi passwords never reach the devtools log.
+      (function () {
+        const orig = console.log.bind(console);
+        console.log = function (...a) {
+          if (a.some(x => typeof x === 'string' && /'shell_(exec|spawn|write)'/.test(x))) return;
+          orig(...a);
+        };
+      })();
+    </script>
+    <script
+      src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"
+      integrity="sha256-aS0B0wnsaDByLfE16h4MDCP1fQFccysd1YWOcV+gbBo="
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module" data-presets="react" src="./popup.jsx"></script>
+  </body>
+</html>
