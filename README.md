@@ -29,7 +29,17 @@ The installer is safe to re-run. It:
 5. adds Startup-folder shortcuts for GlazeWM and `omarchy.ahk` (`-NoStartup` to skip),
 6. starts everything (`-NoStart` to skip).
 
-It does **not** change Windows settings or the registry.
+The installer itself does **not** change Windows settings or the registry. The one Windows setting the setup touches is the taskbar: while `omarchy.ahk` runs, it switches on taskbar auto-hide and hides the taskbar (see [Taskbar](#taskbar)).
+
+### Taskbar
+
+Omarchy has no taskbar, so by default `omarchy.ahk` hides the Windows one:
+
+- **Win+Shift+Space** shows it again (Omarchy's "toggle top bar" key). Press it again to hide it.
+- While it's shown, it behaves like a normal auto-hide taskbar: it slides away when you click elsewhere and slides back when the mouse touches the bottom edge.
+- The Start menu still opens with the Win key or Ctrl+Esc.
+- If the script exits or reloads, the taskbar is shown again, so it can never get stuck hidden.
+- To keep the normal taskbar, set `HIDE_TASKBAR := false` at the top of `omarchy.ahk`, and switch auto-hide back off in Settings → Personalization → Taskbar → Taskbar behaviors → Automatically hide the taskbar.
 
 ### Switch these off yourself
 
@@ -89,6 +99,7 @@ Web apps open as chromeless Edge `--app` windows. Paths and URLs are at the top 
 | Super+Ctrl+X | Win+Ctrl+X | Dictation |
 | Super+Ctrl+Z / Super+Ctrl+Alt+Z | Win+Ctrl+Z / Win+Ctrl+Alt+Z | Zoom in / zoom off (Magnifier) |
 | Super+Ctrl+Alt+T / B | Win+Ctrl+Alt+T / B | Show time / battery |
+| Super+Shift+Space (toggle top bar) | Win+Shift+Space | Show / hide the Windows taskbar |
 
 ### Windows and workspaces (GlazeWM)
 
