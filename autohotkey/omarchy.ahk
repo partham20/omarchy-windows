@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+#UseHook                     ; hotkeys use the keyboard hook, so our own Sends never re-trigger them
 SetWorkingDir A_ScriptDir
+A_MenuMaskKey := "vkE8"      ; stop a Win release after a hotkey from popping the Start menu
 
 TERMINAL      := "wt.exe"
 BROWSER       := "msedge.exe"
@@ -27,6 +29,11 @@ URL_X_POST    := "https://x.com/compose/post"
 LAUNCHER_KEYS := "!{Space}"
 SUPPRESS_START_MENU := false
 
+; Hide the Windows taskbar for good (Omarchy has none). Win+Shift+Space
+; brings it back when you need it, just like Omarchy's "toggle top bar".
+; Set to false to keep the normal taskbar.
+HIDE_TASKBAR := true
+
 Launch(target) {
     try Run(target)
     catch
@@ -38,6 +45,81 @@ LaunchOrFocus(exe, target) {
         WinActivate
     else
         Launch(target)
+}
+
+; Keys that themselves involve Win or the Start menu (Win+V, Win+., Win+H,
+; Win+Shift+S ...) misfire if sent while you're still holding Win, so wait
+; for Win to be released first.
+AfterWin(keys) {
+    KeyWait("LWin")
+    KeyWait("RWin")
+    Send(keys)
+}
+
+; ---------------------------------------------------------------------
+;  Taskbar hide / show
+;  Auto-hide frees the screen space the taskbar reserves; hiding the
+;  window stops it sliding up when the mouse touches the screen edge.
+; ---------------------------------------------------------------------
+TaskbarHidden := false
+
+TaskbarWindows() {
+    DetectHiddenWindows(true)
+    wins := []
+    for cls in ["Shell_TrayWnd", "Shell_SecondaryTrayWnd"]
+        for hwnd in WinGetList("ahk_class " cls)
+            wins.Push(hwnd)
+    return wins
+}
+
+SetTaskbarAutoHide(on) {
+    ; SHAppBarMessage(ABM_SETSTATE, APPBARDATA{lParam = ABS_AUTOHIDE})
+    ; Same switch as Settings > Personalization > Taskbar > Automatically hide.
+    DetectHiddenWindows(true)
+    abd := Buffer(A_PtrSize = 8 ? 48 : 36, 0)
+    NumPut("UInt", abd.Size, abd, 0)
+    NumPut("Ptr", WinExist("ahk_class Shell_TrayWnd"), abd, A_PtrSize)
+    NumPut("Ptr", on ? 1 : 0, abd, abd.Size - A_PtrSize)
+    DllCall("Shell32\SHAppBarMessage", "UInt", 0xA, "Ptr", abd, "UPtr")
+}
+
+HideTaskbar() {
+    global TaskbarHidden := true
+    for hwnd in TaskbarWindows()
+        try WinHide(hwnd)
+}
+
+ShowTaskbar() {
+    global TaskbarHidden := false
+    for hwnd in TaskbarWindows()
+        try WinShow(hwnd)
+    try WinActivate("ahk_class Shell_TrayWnd")   ; slide it up right away
+}
+
+ToggleTaskbar() {
+    if TaskbarHidden
+        ShowTaskbar()
+    else
+        HideTaskbar()
+}
+
+; Explorer restarts and some notifications bring the taskbar back; while it
+; is meant to be hidden, quietly hide it again.
+KeepTaskbarHidden() {
+    if !TaskbarHidden
+        return
+    for hwnd in TaskbarWindows() {
+        try {
+            if WinGetStyle(hwnd) & 0x10000000   ; WS_VISIBLE
+                WinHide(hwnd)
+        }
+    }
+}
+
+; Never leave the taskbar stuck hidden if the script exits or is reloaded.
+RestoreTaskbar(*) {
+    for hwnd in TaskbarWindows()
+        try WinShow(hwnd)
 }
 
 WebApp(url) => Launch(BROWSER ' --app="' url '"')
@@ -60,6 +142,13 @@ BatteryStatus() {
 
 if SUPPRESS_START_MENU
     Hotkey("~LWin", (*) => Send("{Blind}{vkE8}"))
+
+if HIDE_TASKBAR {
+    SetTaskbarAutoHide(true)
+    HideTaskbar()
+    SetTimer(KeepTaskbarHidden, 1500)
+}
+OnExit(RestoreTaskbar)
 
 SysMenu := Menu()
 SysMenu.Add("&Lock", (*) => DllCall("LockWorkStation"))
@@ -101,6 +190,7 @@ CHEATS := [
     ["Win+Ctrl+X", "Dictation"],
     ["Win+Ctrl+Z / Win+Ctrl+Alt+Z", "Zoom in / zoom off"],
     ["Win+Ctrl+Alt+T / B", "Show time / battery"],
+    ["Win+Shift+Space", "Show / hide the Windows taskbar"],
     ["--- GlazeWM ---", ""],
     ["Win+W", "Close window"],
     ["Win+Arrows", "Focus"],
@@ -164,30 +254,34 @@ ShowCheats() {
 #+x::       WebApp(URL_X)
 #+!x::      WebApp(URL_X_POST)
 
-#Space::    Send(LAUNCHER_KEYS)
-#Escape::   SysMenu.Show()
+#Space::    AfterWin(LAUNCHER_KEYS)
+#+Space::   ToggleTaskbar()
+#Escape:: {
+    KeyWait("LWin"), KeyWait("RWin")
+    SysMenu.Show()
+}
 #k::        ShowCheats()
 #^l::       DllCall("LockWorkStation")
 
 #c::        Send("^{Insert}")
 #v::        Send("+{Insert}")
 #x::        Send("^x")
-#^v::       Send("#v")
-#^e::       Send("#.")
+#^v::       AfterWin("#v")
+#^e::       AfterWin("#.")
 
-#^c::           Send("#+s")
+#^c::           AfterWin("#+s")
 !PrintScreen::  Send("#+r")
-#PrintScreen::  Send("#+c")
-#^PrintScreen:: Send("#+t")
+#PrintScreen::  AfterWin("#+c")
+#^PrintScreen:: AfterWin("#+t")
 
 #^a::       Launch("ms-settings:sound")
 #^b::       Launch("ms-settings:bluetooth")
 #^w::       Launch("ms-settings:network-wifi")
 #^n::       Launch("ms-settings:nightlight")
 #^t::       Launch(ACTIVITY)
-#^x::       Send("#h")
-#^z::       Send("#{NumpadAdd}")
-#^!z::      Send("#{Esc}")
+#^x::       AfterWin("#h")
+#^z::       AfterWin("#{NumpadAdd}")
+#^!z::      AfterWin("#{Esc}")
 
 #^!t::      Notify(FormatTime(, "dddd HH:mm  ·  d MMMM yyyy"))
 #^!b::      Notify(BatteryStatus())
