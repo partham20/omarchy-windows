@@ -63,11 +63,16 @@ AfterWin(keys) {
 ; ---------------------------------------------------------------------
 TaskbarHidden := false
 
+; Only Explorer's own taskbars. Zebar's tray icons also use a hidden
+; window of class Shell_TrayWnd; showing that one pops up a blank white
+; "Shell_TrayWnd" window, so it must be left alone.
+TASKBAR := "ahk_class Shell_TrayWnd ahk_exe explorer.exe"
+
 TaskbarWindows() {
     DetectHiddenWindows(true)
     wins := []
     for cls in ["Shell_TrayWnd", "Shell_SecondaryTrayWnd"]
-        for hwnd in WinGetList("ahk_class " cls)
+        for hwnd in WinGetList("ahk_class " cls " ahk_exe explorer.exe")
             wins.Push(hwnd)
     return wins
 }
@@ -78,7 +83,7 @@ SetTaskbarAutoHide(on) {
     DetectHiddenWindows(true)
     abd := Buffer(A_PtrSize = 8 ? 48 : 36, 0)
     NumPut("UInt", abd.Size, abd, 0)
-    NumPut("Ptr", WinExist("ahk_class Shell_TrayWnd"), abd, A_PtrSize)
+    NumPut("Ptr", WinExist(TASKBAR), abd, A_PtrSize)
     NumPut("Ptr", on ? 1 : 0, abd, abd.Size - A_PtrSize)
     DllCall("Shell32\SHAppBarMessage", "UInt", 0xA, "Ptr", abd, "UPtr")
 }
@@ -93,7 +98,7 @@ ShowTaskbar() {
     global TaskbarHidden := false
     for hwnd in TaskbarWindows()
         try WinShow(hwnd)
-    try WinActivate("ahk_class Shell_TrayWnd")   ; slide it up right away
+    try WinActivate(TASKBAR)   ; slide it up right away
 }
 
 ToggleTaskbar() {
